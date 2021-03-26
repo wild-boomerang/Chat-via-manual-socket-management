@@ -1,2 +1,2 @@
-# ITaDDP
-Internet technologies and distributed data processing labs
+Vladislav Zhuravski
+853504
