@@ -5,8 +5,8 @@ import types
 import pickle
 from datetime import datetime
 
-HOST = '127.0.0.1'
-PORT = 65432
+HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
+PORT = 65534        # Port to listen on 1-65535 (0 is reserved) (non-privileged ports are > 1023)
 BUF_SIZE = 1024
 TIME_FORMAT = "%H:%M:%S"
 ENCODING = 'UTF-8'
