@@ -9,40 +9,58 @@ HOST = '127.0.0.1'
 PORT = 65432
 BUF_SIZE = 1024
 TIME_FORMAT = "%H:%M:%S"
+ENCODING = 'UTF-8'
 
 
-def server(username):
+def connect_server(username):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((HOST, PORT))
-            s.listen()  # may be set 1?
-            print('Server is listening and waiting for client connection...')
+            s.listen()
+            print('Server is waiting for client connection...')
             conn, addr = s.accept()
             with conn:
-                chat(conn, username)
-
-        return True
+                conn.sendall(username.encode(ENCODING))
+                interlocutor_name = conn.recv(BUF_SIZE).decode(ENCODING)
+                print_success(interlocutor_name)
+        return True, addr
     except OSError:
-        return False
+        return False, None
 
 
-def client(username):
+def connect_client(username):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        chat(s, username)
+        addr = s.getsockname()
+        interlocutor_name = s.recv(BUF_SIZE).decode(ENCODING)
+        while username == interlocutor_name:
+            username = input('Your interlocutor has the same username. Please, change your username.\n')
+        s.sendall(username.encode(ENCODING))
+        print_success(interlocutor_name)
+    return addr, username
 
 
-def chat(s, username):
+def print_success(interlocutor_name):
+    print(f'You are connected to {interlocutor_name}.\n'
+          f'To exit from the chat you and your interlocutor should enter an empty string.')
+
+
+def udp_chat(addr_to_send, own_addr, username):
+    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_sock.bind(own_addr)
+
     message_pool = []
-    input_thread = threading.Thread(target=input_wrapper, args=(s, username, message_pool))
-    output_thread = threading.Thread(target=output_wrapper, args=(s, username, message_pool))
+    input_thread = threading.Thread(target=input_wrapper, args=(udp_sock, addr_to_send, username, message_pool))
+    output_thread = threading.Thread(target=output_wrapper, args=(udp_sock, username, message_pool))
     input_thread.start()
     output_thread.start()
     input_thread.join()
     output_thread.join()
 
+    udp_sock.close()
 
-def input_wrapper(s, username, message_pool):
+
+def input_wrapper(s, addr_to_send, username, message_pool):
     print('>>> ', flush=True, end='')
 
     while True:
@@ -52,7 +70,7 @@ def input_wrapper(s, username, message_pool):
             time=datetime.now(),
             message=message_content,
         )
-        s.sendall(pickle.dumps(data))
+        s.sendto(pickle.dumps(data), addr_to_send)
         if not message_content:
             break
         message_pool.append(data)
@@ -61,7 +79,7 @@ def input_wrapper(s, username, message_pool):
 
 def output_wrapper(s, username, message_pool):
     while True:
-        data = s.recv(BUF_SIZE)
+        data, _ = s.recvfrom(BUF_SIZE)
         message_item = pickle.loads(data)
         if not message_item.message:
             break
@@ -85,9 +103,13 @@ def clear_console_output():
 def main():
     username = str(input('Choose your name: '))
 
-    is_connected = server(username)
+    own_addr = (HOST, PORT)
+    is_connected, addr_to_send = connect_server(username)
     if not is_connected:
-        client(username)
+        addr_to_send = own_addr
+        own_addr, username = connect_client(username)
+
+    udp_chat(own_addr, addr_to_send, username)
 
 
 if __name__ == '__main__':
